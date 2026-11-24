@@ -92,6 +92,7 @@ function setupRoutes({ client, config, state, fetchImpl }) {
     ],
   }, async () => {
     requireClient(client);
+    requireValue(config.phoneNumber, 'Set TWILIO_PHONE_NUMBER in .env first.');
     requireValue(config.publicUrl, 'Set PUBLIC_URL in .env first (run `ngrok http 3000`).');
     const [number] = await client.incomingPhoneNumbers.list({ phoneNumber: config.phoneNumber, limit: 1 });
     requireValue(number, `${config.phoneNumber} was not found on this account.`);

@@ -69,3 +69,13 @@ test('point-number sets SMS and Voice webhooks to this app', async (t) => {
   assert.equal(env.ok, true);
   assert.deepEqual(update.mock.calls[0].arguments[0], { smsUrl: `${PUBLIC}/channels/sms`, smsMethod: 'POST', voiceUrl: `${PUBLIC}/channels/voice`, voiceMethod: 'POST' });
 });
+
+test('point-number refuses to run without TWILIO_PHONE_NUMBER', async (t) => {
+  const { client, update } = fakeClient({ number: { sid: 'PN1', phoneNumber: '+15550001111', capabilities: {} } });
+  const app = await startApp({ client, env: { TWILIO_PHONE_NUMBER: '' } });
+  t.after(app.close);
+  const env = await app.post('/api/setup/point-number');
+  assert.equal(env.ok, false);
+  assert.match(env.hint, /TWILIO_PHONE_NUMBER/);
+  assert.equal(update.mock.calls.length, 0);
+});
