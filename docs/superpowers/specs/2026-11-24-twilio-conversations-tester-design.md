@@ -111,18 +111,20 @@ twilio-conversations-sample/
 {
   "ok": true,
   "step": "memory.createStore",
+  "durationMs": 1830,
   "request":  { "method": "POST", "url": "https://memory.twilio.com/v1/ControlPlane/Stores", "body": { } },
   "response": { "status": 202, "body": { } },
   "exchanges": [ { "request": {…}, "response": {…}, "durationMs": 0 } ],  // every real HTTP call, incl. polls
   "snippet":  { "curl": "curl -X POST ...", "node": "await client.memory.v1.stores.create({...})" },
+  "data":     { "store": { } },                      // the step's result (null on failure)
   "state":    { "storeId": "mem_store_..." },
   "error":    null,
   "hint":     null
 }
 ```
-On failure: `ok: false`. `error` holds `{ status, code, message, moreInfo }` and `hint` holds a beginner-friendly explanation.
+On failure: `ok: false` and `data: null`. `error` holds `{ status, code, message, moreInfo }` and `hint` holds a beginner-friendly explanation.
 
-`exchanges` are captured from the SDK's HTTP client (`CapturingRequestClient`), so they are the real wire requests; `request`/`response` are the first exchange.
+`exchanges` are captured from the SDK's HTTP client (`CapturingRequestClient`), so they are the real wire requests; `request`/`response` are the first exchange. Captured bodies are copies with secret-looking fields (`auth_token`, `*secret*`, `*password*`) replaced by `[redacted]`.
 
 ### State (`state.json`, git-ignored)
 ```json
@@ -137,11 +139,11 @@ Each step reads its prerequisites from the state, and the forms come pre-filled 
 Each step panel has three parts:
 1. **Learn:** 3–6 sentences plus a small diagram where helpful, with a link to the relevant Twilio doc.
 2. **Do:** a form with sensible defaults and a **Run** button.
-3. **See:** the output in **Rendered**, **JSON** (request, response, polls) and **Code** (curl, Node) tabs.
+3. **See:** the output in **Rendered**, **JSON** (every HTTP exchange) and **Code** (curl, Node) tabs.
 
 | # | Product | Step | SDK calls | Rendered view |
 |---|---|---|---|---|
-| 0 | — | **Setup check** | `api.v2010.accounts(sid).fetch()`; `incomingPhoneNumbers.list({ phoneNumber })`; GET `PUBLIC_URL/health` | Checklist: credentials, phone number + capabilities (SMS/Voice), WhatsApp sender configured, public URL reachable, new-Console reminder. Optional button "Point my number's webhooks at this app" → `incomingPhoneNumbers(sid).update({ smsUrl, voiceUrl })` |
+| 0 | — | **Setup check** | `incomingPhoneNumbers.list({ phoneNumber })` (also the "API key works" check: a Standard API key can list numbers but cannot fetch the Account, and the Account JSON contains the auth token); GET `PUBLIC_URL/health` | Checklist: credentials, phone number + capabilities (SMS/Voice), WhatsApp sender configured, public URL reachable, new-Console reminder. Optional button "Point my number's webhooks at this app" → `incomingPhoneNumbers(sid).update({ smsUrl, voiceUrl })` |
 | 1 | Memory | **Create a Memory Store** | `memory.v1.stores.create({ displayName, description })` → `waitForOperation` | Store card + poll timeline |
 | 2 | Memory | **Create your Profile** | `memory.v1.profiles(storeId).create({ traits: { Contact: { firstName, phone, whatsapp? } } })`; then `lookup(storeId).create({ idType: 'phone', value })` to confirm | Profile card; explains why the profile must exist before traffic |
 | 3 | Intelligence | **Explore operators / create a custom one** (optional) | `intelligence.v3.operators.list()`; `operators.create({ displayName, description, author: 'SELF', prompt, outputFormat: 'JSON', outputSchema })` (default: "Upsell intent detector") | Operator list (Twilio-authored vs custom); custom operator card with prompt + schema |
@@ -150,7 +152,7 @@ Each step panel has three parts:
 | 6 | Orchestrator | **Talk on any channel** | See section 5 | Live chat-style timeline (SSE-driven), with a tab per channel |
 | 7 | Orchestrator | **Inspect & close the conversation** | `conversations.v2.conversations.list()`; `participants(id).list()`; `communications(id).list()`; `conversations(id).update({ status: 'CLOSED' })` | Conversation card; participant chips (type, address, `profileId`); timeline with channel icons; Close button |
 | 8 | Memory | **See what Memory learned** | `observations(storeId, profileId).list()`; `conversationSummaries(storeId, profileId).list({ conversationId })`; `recall(storeId, profileId).create({ query, conversationId })` | Observations list; summary; Recall search box with ranked, scored results |
-| 9 | Intelligence | **See Intelligence results** | `intelligence.v3.operatorResults.list({ conversationId })` + received intelligence webhooks | Sentiment badge, summary text, custom-operator JSON, trigger info |
+| 9 | Intelligence | **See Intelligence results** | `client.request({ method: 'get', uri: 'https://intelligence.twilio.com/v3/OperatorResults', params: { conversationId, pageSize } })` (raw JSON: the twilio 6.3.1 `operatorResults` model keeps only `result.entities`) + received intelligence webhooks | Sentiment badge, summary text, custom-operator JSON, trigger info |
 
 `channelSettings` in step 5 is built from the enabled channels. Rules for each channel are bidirectional (Twilio address as `from` in one rule, as `to` in the other):
 ```json
@@ -187,11 +189,12 @@ The timeline is fed by Orchestrator `COMMUNICATION_CREATED` webhooks from the SS
 
 ## 6. Webhooks and live events
 
-- `POST /webhooks/orchestrator`: payload `{ eventType, timestamp, data }` (e.g., `CONVERSATION_CREATED`, `COMMUNICATION_CREATED`, `PARTICIPANT_ADDED`, `CONVERSATION_UPDATED`). When a conversation appears, the handler stores `conversationId` in state if none is set.
+- `POST /webhooks/orchestrator`: payload `{ eventType, timestamp, data }` (e.g., `CONVERSATION_CREATED`, `COMMUNICATION_CREATED`, `PARTICIPANT_ADDED`, `CONVERSATION_UPDATED`). When a conversation for our configuration appears, the handler stores `conversationId` in state if none is set or the stored one is closed.
 - `POST /webhooks/intelligence`: payload `{ accountId, conversationId, intelligenceConfiguration, operatorResults[] }`.
 - Both always return `200` quickly, push to the event bus, and never throw.
 - Inbound channel requests (`/channels/*`) are also logged as events.
 - `GET /events` is the SSE stream. On connect it replays the ring buffer.
+- Only `/health`, `/webhooks/*` and `/channels/*` answer through the tunnel. The UI, `/api/*` and `/events` answer only when the Host is `localhost`, `127.0.0.1` or `[::1]` (403 otherwise), so a public ngrok URL can't drive the tester.
 - The UI event log has filter chips (Orchestrator / Intelligence / Channels), expandable JSON, and a clear button.
 - Twilio request-signature validation is applied to the `/channels/*` routes (`twilio.webhook()` middleware, using `TWILIO_AUTH_TOKEN` when provided; skipped with a startup warning otherwise). The docs reviewed did not specify a signature scheme for the Orchestrator/Intelligence webhooks, so those are not validated. The README says so.
 
@@ -225,7 +228,7 @@ PORT=3000
   - `FAILED` returns the operation's `error`.
   - If the result has no ID, falls back to listing by `displayName`.
 - The UI never hides errors. The JSON tab always shows the raw error body.
-- Steps whose prerequisites are missing are shown as blocked, and their Run button is disabled with the reason.
+- Steps whose prerequisites are missing are shown as blocked. Their Run button stays enabled; pressing it returns a prerequisite hint naming the missing step (see the blocked-steps refinement in §4).
 
 ## 9. Testing
 

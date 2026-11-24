@@ -24,7 +24,7 @@ Each step explains a concept, runs the real API call against **your** Twilio acc
 - An account on the **new Twilio Console** ([1console.twilio.com](https://1console.twilio.com)) with Conversation Orchestrator, Memory and Intelligence available, and the AI/ML Features Addendum accepted.
 - A Twilio phone number with **SMS and Voice**.
 - *(Optional)* A **registered WhatsApp sender** on the same account.
-- An **API Key + Secret** (Console → API keys & tokens).
+- A **Standard API Key + Secret** (Console → API keys & tokens → Create API key → type *Standard*). Step 0 checks the key by listing your phone numbers.
 - **Node.js 20+** and **[ngrok](https://ngrok.com/)** (or any HTTPS tunnel).
 
 > These products are not HIPAA eligible or PCI compliant. Use test data only. Voice capture adds transcription fees.
@@ -39,6 +39,12 @@ cp .env.example .env        # fill in your values
 ngrok http 3000             # in a second terminal; copy the https URL into PUBLIC_URL
 npm start                   # open http://localhost:3000
 ```
+
+Open the tester at `http://localhost:3000`, not at the ngrok URL: the UI only answers on localhost (see Security notes).
+
+**Free ngrok URLs change every time ngrok restarts.** When that happens: update `PUBLIC_URL` in `.env`, restart `npm start`, and re-run Step 0's **Point my number's webhooks at this app**. Re-create the Step 4 and Step 5 configurations too (their webhook URLs include `PUBLIC_URL`), or use Reset. With `TWILIO_AUTH_TOKEN` set, a stale `PUBLIC_URL` makes every SMS/Voice webhook fail signature validation with 403; the server log names the URL it checked.
+
+Before trying it on a real account, walk through [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md).
 
 ## The steps
 
@@ -68,7 +74,8 @@ npm start                   # open http://localhost:3000
 
 ## Security notes
 
-- Credentials stay on the server. The browser never sees your API secret.
+- Credentials stay on the server. The browser never sees your API secret or Auth Token, and secret-looking fields in recorded Twilio responses are shown as `[redacted]`.
+- The UI, `/api/*` and `/events` only answer on `localhost` / `127.0.0.1` / `[::1]`. Requests that arrive through the tunnel get 403, so someone who finds your ngrok URL can't create or delete resources. The tunnel only serves Twilio's webhooks (`/webhooks/*`, `/channels/*`) and `/health`.
 - If you set `TWILIO_AUTH_TOKEN`, inbound `/channels/*` webhooks are checked for a valid Twilio signature. The Orchestrator and Intelligence webhooks are not signature-checked in this sample.
 - This is a local learning tool. Don't deploy it as-is.
 
@@ -76,7 +83,9 @@ npm start                   # open http://localhost:3000
 
 | Symptom | Fix |
 |---|---|
-| 401 on every step | Check `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY` and `TWILIO_API_SECRET`. The key must belong to that account. |
+| 401 on every step | Check `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY` and `TWILIO_API_SECRET`. The key must belong to that account (a Standard API key is enough). |
+| 403 "only answer on localhost" | Open `http://localhost:3000` instead of the ngrok URL. |
+| SMS/Voice webhooks get 403 after restarting ngrok | `PUBLIC_URL` is stale. Update it, restart, and re-run Step 0's "Point my number's webhooks". |
 | 403 / 404 on Memory, Orchestrator or Intelligence | The account must be on the new Console with the product enabled and the AI addendum accepted. |
 | Messages don't show up in Step 6 | Run Step 0. `PUBLIC_URL` must reach this app, and the number's webhooks must point at `/channels/*`. Check that no other conversation configuration captures the same number. |
 | Participant has no `profileId` | Create the profile (Step 2) **before** you text or call, using the same number. |
