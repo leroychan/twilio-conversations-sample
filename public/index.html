@@ -1,3 +1,28 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Twilio Conversations Tester</title></head>
-<body><p>Conversations Tester is starting…</p></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Twilio Conversations Tester</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Conversations Tester</span>
+      <span class="muted">Orchestrator · Memory · Intelligence</span>
+    </div>
+    <div class="top-actions">
+      <button id="run-all" type="button">Run setup steps 1–5</button>
+      <button id="reset" type="button" class="danger">Reset</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav id="rail" class="rail" aria-label="Steps"></nav>
+    <main id="main" class="main" tabindex="-1"></main>
+    <aside id="events" class="events" aria-label="Live events"></aside>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
