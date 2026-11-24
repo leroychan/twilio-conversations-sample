@@ -11,6 +11,7 @@ export const STEPS = [
   { id: 7, product: 'Orchestrator', title: 'Inspect & close the conversation', requires: ['conversationId'], done: (s) => Boolean(s.conversationClosed) },
   { id: 8, product: 'Memory', title: 'See what Memory learned', requires: ['profileId', 'conversationId'], done: () => false },
   { id: 9, product: 'Intelligence', title: 'See Intelligence results', requires: ['conversationId'], done: () => false },
+  { id: 10, product: 'Cleanup', title: 'Clean up & restore', requires: [], done: () => false },
 ];
 
 const CREATED_BY = { storeId: 'Step 1', profileId: 'Step 2', intelligenceConfigId: 'Step 4', orchestratorConfigId: 'Step 5', conversationId: 'Step 6' };

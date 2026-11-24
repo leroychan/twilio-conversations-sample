@@ -5,6 +5,7 @@ const { loadConfig } = require('./lib/config');
 const { createTwilioClient } = require('./lib/twilio');
 const { createState } = require('./lib/state');
 const { createEventBus } = require('./lib/events');
+const { createBackup } = require('./lib/backup');
 const { createApp } = require('./lib/app');
 
 const config = loadConfig();
@@ -13,6 +14,7 @@ const app = createApp({
   client: createTwilioClient(config),
   state: createState(path.join(__dirname, 'state.json')),
   events: createEventBus(),
+  backup: createBackup(path.join(__dirname, '.tester-backup.json')),
 });
 
 app.listen(config.port, () => {

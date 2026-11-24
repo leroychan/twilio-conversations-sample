@@ -84,6 +84,35 @@ test('point-number sets SMS and Voice webhooks to this app', async (t) => {
   assert.deepEqual(update.mock.calls[0].arguments[0], { smsUrl: `${PUBLIC}/channels/sms`, smsMethod: 'POST', voiceUrl: `${PUBLIC}/channels/voice`, voiceMethod: 'POST' });
 });
 
+test('point-number backs up the original webhooks before changing them, only once', async (t) => {
+  const number = { sid: 'PN1', phoneNumber: '+15550001111', capabilities: {}, smsUrl: 'https://my-app.example/sms', smsMethod: 'GET', voiceUrl: 'https://my-app.example/voice', voiceMethod: 'POST' };
+  const { client } = fakeClient({ number });
+  const app = await startApp({ client });
+  t.after(app.close);
+  const env = await app.post('/api/setup/point-number');
+  assert.equal(env.ok, true, JSON.stringify(env.error));
+  const saved = app.backup.get().phoneNumber;
+  assert.deepEqual(
+    { sid: saved.sid, phoneNumber: saved.phoneNumber, smsUrl: saved.smsUrl, smsMethod: saved.smsMethod, voiceUrl: saved.voiceUrl, voiceMethod: saved.voiceMethod, pointedAtTester: saved.pointedAtTester },
+    { sid: 'PN1', phoneNumber: '+15550001111', smsUrl: 'https://my-app.example/sms', smsMethod: 'GET', voiceUrl: 'https://my-app.example/voice', voiceMethod: 'POST', pointedAtTester: false },
+  );
+  assert.equal(env.data.backup.smsUrl, 'https://my-app.example/sms');
+
+  // Running it again (the number now points at the tester) must keep the true originals.
+  Object.assign(number, { smsUrl: `${PUBLIC}/channels/sms`, voiceUrl: `${PUBLIC}/channels/voice` });
+  await app.post('/api/setup/point-number');
+  assert.equal(app.backup.get().phoneNumber.smsUrl, 'https://my-app.example/sms');
+});
+
+test('point-number flags a backup whose "original" already pointed at a tester', async (t) => {
+  const number = { sid: 'PN1', phoneNumber: '+15550001111', capabilities: {}, smsUrl: 'https://old-tunnel.ngrok.app/channels/sms', voiceUrl: '' };
+  const { client } = fakeClient({ number });
+  const app = await startApp({ client });
+  t.after(app.close);
+  await app.post('/api/setup/point-number');
+  assert.equal(app.backup.get().phoneNumber.pointedAtTester, true);
+});
+
 test('point-number refuses to run without TWILIO_PHONE_NUMBER', async (t) => {
   const { client, update } = fakeClient({ number: { sid: 'PN1', phoneNumber: '+15550001111', capabilities: {} } });
   const app = await startApp({ client, env: { TWILIO_PHONE_NUMBER: '' } });

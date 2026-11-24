@@ -122,7 +122,7 @@ function goTo(id) {
   location.hash = `#/step/${id}`;
 }
 
-// Navigate to a step and show a result envelope at the top of it (used by Run all and Reset).
+// Navigate to a step and show a result envelope at the top of it (used by Run all).
 function show(id, lastRun, lastRender) {
   pending = { id, lastRun, lastRender };
   if (currentStepId() === id) renderStep();
@@ -148,7 +148,7 @@ function renderStep() {
     body,
     h('div', { class: 'actions' },
       meta.id > 0 && h('button', { type: 'button', onClick: () => goTo(meta.id - 1) }, '← Previous'),
-      meta.id < 9 && h('button', { type: 'button', onClick: () => goTo(meta.id + 1) }, 'Next →'))].filter(Boolean));
+      meta.id < STEPS.at(-1).id && h('button', { type: 'button', onClick: () => goTo(meta.id + 1) }, 'Next →'))].filter(Boolean));
   if (mod) cleanup = mod.mount(body, ctx) || null;
   else body.append(h('p', { class: 'muted' }, 'This step is coming soon.'));
   renderRail();
@@ -179,17 +179,9 @@ async function runAll(button) {
   else goTo(6);
 }
 
-const renderDeleted = (data) => h('ul', { class: 'checklist' }, (data.deleted || []).map((d) =>
-  h('li', { class: d.ok ? 'ok' : 'fail' }, h('strong', {}, `${d.ok ? '✓' : '✕'} ${d.label}`), h('div', { class: 'muted' }, `${d.id}${d.note ? ` (${d.note})` : ''}${d.error ? `: ${d.error}` : ''}`))));
-
-async function reset(button) {
-  if (!confirm('Delete the Memory store, configurations and custom operator this tester created, and clear local state?')) return;
-  const envelope = await ctx.run({ button, call: () => api.post('/api/reset') });
-  show(0, envelope, renderDeleted);
-}
-
 document.getElementById('run-all').addEventListener('click', (e) => runAll(e.currentTarget));
-document.getElementById('reset').addEventListener('click', (e) => reset(e.currentTarget));
+// Reset lives in Step 10, which shows exactly what will be restored and deleted first.
+document.getElementById('reset').addEventListener('click', () => goTo(STEPS.at(-1).id));
 
 let boot;
 try {

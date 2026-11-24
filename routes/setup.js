@@ -4,7 +4,7 @@ const { record, respond } = require('../lib/recorder');
 const { requireClient, requireValue } = require('../lib/errors');
 const { publicConfig } = require('../lib/config');
 const { call } = require('../lib/snippets');
-const { uiDefaults } = require('../lib/builders');
+const { uiDefaults, isTesterWebhook } = require('../lib/builders');
 
 async function checkPublicUrl(publicUrl, fetchImpl) {
   const base = { id: 'publicUrl', label: 'Public URL reaches this app' };
@@ -19,7 +19,7 @@ async function checkPublicUrl(publicUrl, fetchImpl) {
   }
 }
 
-function setupRoutes({ client, config, state, fetchImpl }) {
+function setupRoutes({ client, config, state, backup, fetchImpl }) {
   const router = express.Router();
   const yesNo = (value) => (value ? 'yes' : 'no');
   const webhookUrls = {
@@ -83,6 +83,7 @@ function setupRoutes({ client, config, state, fetchImpl }) {
     state,
     code: [
       `const [number] = await ${call('client.incomingPhoneNumbers.list', { phoneNumber: config.phoneNumber, limit: 1 })};`,
+      '// Save number.smsUrl, smsMethod, voiceUrl and voiceMethod first, so you can put them back later (Step 10).',
       `await ${call('client.incomingPhoneNumbers(number.sid).update', webhookUrls)};`,
     ],
   }, async () => {
@@ -91,8 +92,18 @@ function setupRoutes({ client, config, state, fetchImpl }) {
     requireValue(config.publicUrl, 'Set PUBLIC_URL in .env first (run `ngrok http 3000`).');
     const [number] = await client.incomingPhoneNumbers.list({ phoneNumber: config.phoneNumber, limit: 1 });
     requireValue(number, `${config.phoneNumber} was not found on this account.`);
+    // Back up the current webhooks before changing them (only the first time), for Step 10.
+    const original = backup.saveOnce('phoneNumber', {
+      sid: number.sid,
+      phoneNumber: number.phoneNumber,
+      smsUrl: number.smsUrl || '',
+      smsMethod: number.smsMethod || 'POST',
+      voiceUrl: number.voiceUrl || '',
+      voiceMethod: number.voiceMethod || 'POST',
+      pointedAtTester: isTesterWebhook(number.smsUrl) || isTesterWebhook(number.voiceUrl),
+    });
     const updated = await client.incomingPhoneNumbers(number.sid).update(webhookUrls);
-    return { sid: updated.sid, smsUrl: updated.smsUrl, voiceUrl: updated.voiceUrl };
+    return { sid: updated.sid, smsUrl: updated.smsUrl, voiceUrl: updated.voiceUrl, backup: original };
   })));
 
   return router;

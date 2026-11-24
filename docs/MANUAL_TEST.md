@@ -18,7 +18,8 @@ Use this checklist on a migrated (new Console) account. The automated tests use 
 | 7 | Load conversation; close it | Customer participant has `profileId` matching Step 2 (✓ badge); status becomes CLOSED | |
 | 8 | Wait on Memory results | Observations and a summary appear within ~2 minutes; Recall returns scored matches | |
 | 9 | Wait on Intelligence results | Sentiment results per message, custom operator JSON, and a Summary after close; Intelligence webhooks in Live events | |
-| R | Reset | All resources deleted (or "already deleted"); state cleared; rail back to step 1 | |
+| 10a | Before Step 0's "Point my number's webhooks", note the number's SMS/Voice URLs in the Console. Run it, then open Step 10 | `.tester-backup.json` exists; the plan shows each webhook going from the tunnel URL back to the values you noted, and lists the conversations, configurations, operator and store to delete | |
+| 10b | Click "Restore & delete everything" | The number's webhooks in the Console match your notes again; every resource ✓ (or "already deleted"); `.tester-backup.json` is gone; state cleared; rail back to step 1 | |
 
 **Open questions to record from this run** (spec §11):
 - Do API-created (simulated) communications trigger `COMMUNICATION` rules and memory extraction?

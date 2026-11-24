@@ -6,6 +6,7 @@ const { createApp } = require('../../lib/app');
 const { createState } = require('../../lib/state');
 const { createEventBus } = require('../../lib/events');
 const { loadConfig } = require('../../lib/config');
+const { createBackup } = require('../../lib/backup');
 
 const TEST_ENV = {
   TWILIO_ACCOUNT_SID: 'AC' + 'a'.repeat(32),
@@ -24,8 +25,9 @@ async function startApp({ client = null, env = {}, config, fetchImpl } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tester-'));
   const state = createState(path.join(dir, 'state.json'));
   const events = createEventBus();
+  const backup = createBackup(path.join(dir, '.tester-backup.json'));
   const appConfig = config || loadConfig({ ...TEST_ENV, ...env });
-  const app = createApp({ config: appConfig, client, state, events, sleep: async () => {}, fetchImpl });
+  const app = createApp({ config: appConfig, client, state, events, backup, sleep: async () => {}, fetchImpl });
   const server = await new Promise((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
@@ -35,6 +37,7 @@ async function startApp({ client = null, env = {}, config, fetchImpl } = {}) {
     url,
     state,
     events,
+    backup,
     config: appConfig,
     get: (p) => fetch(url + p).then(asJson),
     post: (p, body = {}) => fetch(url + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(asJson),

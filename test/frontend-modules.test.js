@@ -11,4 +11,5 @@ test('step modules match the progress rail and implement mount()', async () => {
     assert.ok(STEPS.some((s) => s.id === mod.id), `step ${mod.id} in STEPS`);
   }
   assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(ids, STEPS.map((s) => s.id), 'every step in the rail has a module');
 });

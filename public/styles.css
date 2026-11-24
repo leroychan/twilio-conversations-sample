@@ -75,6 +75,7 @@ button.busy::after { content: " …"; }
 .product-Intelligence { background: var(--product-intelligence); }
 .product-Orchestrator { background: var(--product-orchestrator); }
 .product-Setup { background: var(--product-setup); }
+.product-Cleanup { background: var(--neutral-700); }
 .learn { background: var(--color-surface); border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary); border-radius: var(--radius); padding: 0.5rem 1.25rem; margin: 1rem 0; }
 .learn .note { color: var(--color-text-muted); font-size: 0.9rem; }
 .blocked-banner { background: #FFF8E6; border: 1px solid var(--color-warning); border-radius: var(--radius); padding: 0.6rem 1rem; }
@@ -157,3 +158,15 @@ pre.json, pre.code { background: var(--neutral-900); color: #E6EDF7; padding: 0.
 .operators code { font-size: 0.75rem; }
 
 .big { font-size: 1.4rem; margin: 0.25rem 0; }
+
+/* Step 10: clean-up plan */
+.plan { border: 1px solid var(--color-border); border-left-width: 4px; border-radius: var(--radius); padding: 0.5rem 1rem; margin: 0.75rem 0; background: var(--color-surface); }
+.plan h4 { margin: 0.25rem 0 0.5rem; }
+.plan-restore { border-left-color: var(--color-primary); }
+.plan-delete { border-left-color: var(--color-danger); }
+.plan-manual { border-left-color: var(--color-warning); }
+.change { font-family: var(--font-mono); font-size: 0.8rem; word-break: break-all; }
+.change .from { color: var(--color-text-muted); text-decoration: line-through; }
+.change .to { color: var(--color-success); font-weight: 600; }
+button.danger-fill { background: var(--color-danger); border-color: var(--color-danger); }
+button.danger-fill:hover { background: var(--red-500); filter: brightness(0.9); }

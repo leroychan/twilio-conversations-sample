@@ -60,8 +60,19 @@ Before trying it on a real account, walk through [docs/MANUAL_TEST.md](docs/MANU
 | 7 | Orchestrator | Inspect participants and the timeline; close the conversation | `routes/orchestrator.js` |
 | 8 | Memory | See observations and summaries; try Recall | `routes/memory.js` |
 | 9 | Intelligence | See operator results | `routes/intelligence.js` |
+| 10 | Clean up | Restore your number's original webhooks, delete everything the tester created, list what to undo by hand | `routes/reset.js`, `lib/backup.js` |
 
-**Run setup steps 1–5** creates everything with default values. **Reset** deletes what the tester created and clears `state.json`.
+**Run setup steps 1–5** creates everything with default values. **Reset** opens Step 10.
+
+### Cleaning up (Step 10)
+
+Before Step 0 points your phone number at this app, it saves the number's original SMS and Voice webhooks to `.tester-backup.json`. The file is git-ignored and is only written the first time, so pointing the number again never replaces the originals. Step 10 first shows a plan, then does it when you click **Restore & delete everything**:
+
+| | What | How |
+|---|---|---|
+| 🔁 Restored | Your phone number's SMS + Voice webhooks | Set back to the values in `.tester-backup.json` (the file is removed once that works) |
+| 🗑 Deleted | Conversations, Conversation Configuration (capture rules), Intelligence Configuration, custom operator, Memory Store (with your profile, observations and summaries) | Twilio API, newest first. Anything that fails is reported and kept in `state.json`, so you can run Step 10 again |
+| ✋ By hand | WhatsApp sender webhook, ngrok, the API key (optional), `.env` | The tester never changed these itself, so Step 10 tells you where to undo them |
 
 ## How the code is organized
 
