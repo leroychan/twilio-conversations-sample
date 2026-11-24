@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { inspect } = require('node:util');
 const assert = require('node:assert/strict');
 const { record } = require('../lib/recorder');
 const { recordExchange } = require('../lib/capture');
@@ -41,4 +42,16 @@ test('prerequisite errors use their message as the hint', async () => {
   assert.equal(env.ok, false);
   assert.equal(env.error.code, 'PREREQUISITE');
   assert.equal(env.hint, 'Complete Step 1 first.');
+});
+
+test('unexpected errors are logged without the raw error object (no credential leak)', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const err = Object.assign(new Error('socket hang up'), { config: { auth: { username: 'SKx', password: 'TOP-SECRET' } } });
+  const env = await record({ step: 'net', state: fakeState({}) }, async () => {
+    throw err;
+  });
+  assert.equal(env.ok, false);
+  const text = logged.mock.calls.map((call) => call.arguments.map((arg) => inspect(arg, { depth: null })).join(' ')).join('\n');
+  assert.doesNotMatch(text, /TOP-SECRET/);
+  assert.match(text, /socket hang up/);
 });
