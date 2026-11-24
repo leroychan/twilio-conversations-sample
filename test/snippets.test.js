@@ -32,6 +32,15 @@ test('curlForExchanges dedupes repeated identical polls', () => {
   assert.equal(out.split('curl -X').length - 1, 2);
 });
 
+test('curlForExchanges keeps POSTs to the same URL with different bodies', () => {
+  const first = { request: { method: 'POST', url: 'https://memory.twilio.com/v1/ControlPlane/Stores', body: { displayName: 'A' }, contentType: 'application/json' } };
+  const second = { request: { method: 'POST', url: 'https://memory.twilio.com/v1/ControlPlane/Stores', body: { displayName: 'B' }, contentType: 'application/json' } };
+  const out = curlForExchanges([first, second]);
+  assert.equal(out.split('curl -X').length - 1, 2);
+  assert.ok(out.includes('"displayName": "A"'));
+  assert.ok(out.includes('"displayName": "B"'));
+});
+
 test('call renders an SDK expression with pretty JSON args', () => {
   assert.equal(call('client.memory.v1.stores.create', { displayName: 'A' }), 'client.memory.v1.stores.create({\n  "displayName": "A"\n})');
   assert.equal(call('client.memory.v1.stores("x").fetch'), 'client.memory.v1.stores("x").fetch()');

@@ -49,7 +49,10 @@ test('CapturingRequestClient records the wire request and response', async () =>
   assert.deepEqual(x.request, { method: 'POST', url: 'https://memory.twilio.com/v1/ControlPlane/Stores', body: { displayName: 'Demo' }, contentType: 'application/json' });
   assert.equal(x.response.status, 202);
   assert.deepEqual(x.response.headers, { 'retry-after': '2' });
-  assert.ok(!JSON.stringify(x).includes('secret'));
+  const recorded = JSON.stringify(x);
+  assert.ok(!recorded.includes('{PASSWORD}'), 'password must not be recorded');
+  assert.ok(!recorded.includes('SKtest'), 'username must not be recorded');
+  assert.ok(!recorded.includes('Authorization'), 'auth header must not be recorded');
 });
 
 test('query params are rendered into the recorded URL', async () => {
