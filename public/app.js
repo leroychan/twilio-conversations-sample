@@ -189,11 +189,17 @@ async function reset(button) {
 
 document.getElementById('run-all').addEventListener('click', (e) => runAll(e.currentTarget));
 document.getElementById('reset').addEventListener('click', (e) => reset(e.currentTarget));
-window.addEventListener('hashchange', () => renderStep());
 
-const boot = await fetch('/api/setup/config').then((r) => r.json());
+let boot;
+try {
+  boot = await fetch('/api/setup/config').then((r) => r.json());
+} catch (err) {
+  main.replaceChildren(h('p', { class: 'muted' }, `Could not load /api/setup/config — is \`npm start\` running? ${err.message}`));
+  throw err;
+}
 config = boot.config;
 defaults = boot.defaults;
 state = boot.state;
+window.addEventListener('hashchange', () => renderStep());
 if (!location.hash) location.hash = '#/step/0';
-renderStep();
+else renderStep();
