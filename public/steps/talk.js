@@ -39,6 +39,7 @@ export default {
     };
     const unsubscribe = ctx.onEvent((event) => {
       if (event.source === 'orchestrator' && event.type === 'COMMUNICATION_CREATED' && event.payload?.data) {
+        if (event.payload.data.id && live.some((c) => c.id === event.payload.data.id)) return;
         live.push(event.payload.data);
         drawTimeline();
       } else if (event.source === 'orchestrator') {

@@ -139,7 +139,7 @@ function renderStep() {
   const mod = modulesById.get(meta.id);
   const { status, reason } = stepStatus(meta, state);
   const body = h('div', { class: 'step-body' });
-  main.replaceChildren(
+  main.replaceChildren(...[
     h('div', { class: 'step-header' }, h('span', { class: `product product-${meta.product}` }, meta.product), h('h2', {}, `${meta.id}. ${meta.title}`)),
     status === 'blocked' && h('p', { class: 'blocked-banner' }, `🔒 ${reason}. You can read this step now; its Run buttons will explain what is missing.`),
     mod && h('div', { class: 'learn', html: mod.learn }),
@@ -148,7 +148,7 @@ function renderStep() {
     body,
     h('div', { class: 'actions' },
       meta.id > 0 && h('button', { type: 'button', onClick: () => goTo(meta.id - 1) }, '← Previous'),
-      meta.id < 9 && h('button', { type: 'button', onClick: () => goTo(meta.id + 1) }, 'Next →')));
+      meta.id < 9 && h('button', { type: 'button', onClick: () => goTo(meta.id + 1) }, 'Next →'))].filter(Boolean));
   if (mod) cleanup = mod.mount(body, ctx) || null;
   else body.append(h('p', { class: 'muted' }, 'This step is coming soon.'));
   renderRail();
