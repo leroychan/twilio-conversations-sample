@@ -9,14 +9,27 @@ function fakeIntelligence() {
     operatorsList: mock.fn(async () => [{ id: TWILIO_OPERATORS.SUMMARY, displayName: 'Summary', author: 'TWILIO', outputFormat: 'TEXT', version: 1, prompt: 'hidden' }]),
     operatorsCreate: mock.fn(async (p) => ({ id: 'intelligence_operator_custom', ...p })),
     configurationsCreate: mock.fn(async (p) => ({ id: 'intelligence_configuration_1', ...p, rules: p.rules.map((r, i) => ({ id: `rule_${i}`, ...r })) })),
-    resultsList: mock.fn(async () => [{ id: 'r1', outputFormat: 'TEXT', result: 'Customer wants an upgrade', operator: { id: TWILIO_OPERATORS.SUMMARY } }]),
+    // Raw JSON, like the API returns it. Token-paginated lists name their array in meta.key.
+    request: mock.fn(async () => ({
+      statusCode: 200,
+      headers: {},
+      body: {
+        operatorResults: [
+          { id: 'r1', outputFormat: 'TEXT', result: 'Customer wants an upgrade', operator: { id: TWILIO_OPERATORS.SUMMARY } },
+          { id: 'r2', outputFormat: 'CLASSIFICATION', result: { label: 'positive' }, operator: { id: TWILIO_OPERATORS.SENTIMENT } },
+        ],
+        meta: { key: 'operatorResults', pageSize: 50 },
+      },
+    })),
+    throwException: mock.fn((res) => { throw Object.assign(new Error(res.body.message), { status: res.statusCode }); }),
   };
   const client = {
+    request: fns.request,
     intelligence: {
       v3: {
         operators: { list: fns.operatorsList, create: fns.operatorsCreate },
         configurations: { create: fns.configurationsCreate },
-        operatorResults: { list: fns.resultsList },
+        throwException: fns.throwException,
       },
     },
   };
@@ -85,7 +98,26 @@ test('results combine the API list with webhooks for this conversation', async (
   app.events.publish('intelligence', 'OPERATOR_RESULTS', { conversationId: 'conv_other', operatorResults: [] });
   const env = await app.get('/api/intelligence/results');
   assert.equal(env.ok, true, JSON.stringify(env.error));
-  assert.deepEqual(fns.resultsList.mock.calls[0].arguments[0], { conversationId: 'conv_1', limit: 50 });
-  assert.equal(env.data.results.length, 1);
+  assert.deepEqual(fns.request.mock.calls[0].arguments[0], {
+    method: 'get',
+    uri: 'https://intelligence.twilio.com/v3/OperatorResults',
+    params: { conversationId: 'conv_1', pageSize: 50 },
+  });
+  // The SDK model would drop these (it only keeps result.entities); the raw JSON keeps them.
+  assert.equal(env.data.results[0].result, 'Customer wants an upgrade');
+  assert.deepEqual(env.data.results[1].result, { label: 'positive' });
   assert.equal(env.data.webhooks.length, 1);
+  assert.match(env.snippet.node, /client\.request\(/);
+});
+
+test('results report Twilio errors from the raw request', async (t) => {
+  const { client, fns } = fakeIntelligence();
+  fns.request.mock.mockImplementation(async () => ({ statusCode: 404, headers: {}, body: { message: 'Not found' } }));
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ conversationId: 'conv_1' });
+  const env = await app.get('/api/intelligence/results');
+  assert.equal(env.ok, false);
+  assert.equal(env.error.status, 404);
+  assert.match(env.hint, /Reset/);
 });

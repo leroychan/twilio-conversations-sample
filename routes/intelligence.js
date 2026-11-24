@@ -73,17 +73,30 @@ function intelligenceRoutes({ client, config, state, events }) {
   }));
 
   // Step 9: operator results for the current conversation, plus any webhooks we received.
+  // We read the raw JSON with client.request: in twilio 6.3.1 the operatorResults.list() model
+  // keeps only `result.entities`, so TEXT, CLASSIFICATION and JSON results would come back empty.
   router.get('/results', respond(() => {
     const current = state.get();
-    const params = { conversationId: current.conversationId, limit: 50 };
+    const request = {
+      method: 'get',
+      uri: 'https://intelligence.twilio.com/v3/OperatorResults',
+      params: { conversationId: current.conversationId, pageSize: 50 },
+    };
     return record({
       step: 'intelligence.results',
       state,
-      code: [`const results = await ${call('client.intelligence.v3.operatorResults.list', params)};`],
+      code: [
+        `const response = await ${call('client.request', request)};`,
+        '// Token-paginated lists name their array in meta.key (here: operatorResults).',
+        'const results = response.body[response.body.meta.key];',
+      ],
     }, async () => {
       requireClient(client);
       requireState(current, ['conversationId']);
-      const results = await client.intelligence.v3.operatorResults.list(params);
+      const response = await client.request(request);
+      if (response.statusCode < 200 || response.statusCode >= 300) client.intelligence.v3.throwException(response);
+      const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+      const results = body?.[body?.meta?.key || 'operatorResults'] || [];
       const webhooks = events
         .recent((e) => e.source === 'intelligence' && e.payload?.conversationId === current.conversationId)
         .map((e) => ({ receivedAt: e.at, ...e.payload }));

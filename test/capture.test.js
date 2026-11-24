@@ -60,9 +60,9 @@ test('query params are rendered into the recorded URL', async () => {
   http.axios = async () => ({ status: 200, data: '{"items":[]}', headers: {} });
   const { exchanges } = await captureExchanges(() => http.request({
     method: 'get', uri: 'https://intelligence.twilio.com/v3/OperatorResults', username: 'SK', password: 'p',
-    params: { conversationId: 'conv_1', PageSize: 50 },
+    params: { conversationId: 'conv_1', pageSize: 50 },
   }));
-  assert.equal(exchanges[0].request.url, 'https://intelligence.twilio.com/v3/OperatorResults?conversationId=conv_1&PageSize=50');
+  assert.equal(exchanges[0].request.url, 'https://intelligence.twilio.com/v3/OperatorResults?conversationId=conv_1&pageSize=50');
   assert.deepEqual(exchanges[0].response.body, { items: [] });
 });
 

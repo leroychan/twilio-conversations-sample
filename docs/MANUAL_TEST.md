@@ -24,4 +24,4 @@ Use this checklist on a migrated (new Console) account. The automated tests use 
 - Do API-created (simulated) communications trigger `COMMUNICATION` rules and memory extraction?
 - Does the Orchestrator configuration 202 response include `related.configurationId`?
 - Which trait key does Memory accept for WhatsApp in the `Contact` group (`whatsapp`)?
-- What is the exact shape of Sentiment and Summary `result` values? Adjust `public/steps/intelligence-results.js` rendering if needed.
+- What is the exact shape of Sentiment and Summary `result` values? Step 9 reads the raw JSON from `GET https://intelligence.twilio.com/v3/OperatorResults` with `client.request`, because the twilio 6.3.1 `operatorResults.list()` model keeps only `result.entities` (TEXT, CLASSIFICATION and JSON results would show `{}`). Confirm the list array key (`meta.key`, expected `operatorResults`) in the JSON tab, and adjust `public/steps/intelligence-results.js` rendering if needed.
