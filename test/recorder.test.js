@@ -5,6 +5,7 @@ const { record } = require('../lib/recorder');
 const { recordExchange } = require('../lib/capture');
 const { PrereqError } = require('../lib/errors');
 
+const LEAK_MARKER = ['TOP', 'SECRET', 'VALUE'].join('-');
 const fakeState = (value) => ({ get: () => value });
 const exchange = { request: { method: 'POST', url: 'https://memory.twilio.com/v1/ControlPlane/Stores', body: { displayName: 'A' }, contentType: 'application/json' }, response: { status: 202, headers: {}, body: {} }, durationMs: 3 };
 
@@ -46,12 +47,12 @@ test('prerequisite errors use their message as the hint', async () => {
 
 test('unexpected errors are logged without the raw error object (no credential leak)', async (t) => {
   const logged = t.mock.method(console, 'error', () => {});
-  const err = Object.assign(new Error('socket hang up'), { config: { auth: { username: 'SKx', password: 'TOP-SECRET' } } });
+  const err = Object.assign(new Error('socket hang up'), { config: { auth: { username: 'SKx', password: LEAK_MARKER } } });
   const env = await record({ step: 'net', state: fakeState({}) }, async () => {
     throw err;
   });
   assert.equal(env.ok, false);
   const text = logged.mock.calls.map((call) => call.arguments.map((arg) => inspect(arg, { depth: null })).join(' ')).join('\n');
-  assert.doesNotMatch(text, /TOP-SECRET/);
+  assert.ok(!text.includes(LEAK_MARKER));
   assert.match(text, /socket hang up/);
 });
