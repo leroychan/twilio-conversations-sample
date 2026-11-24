@@ -4,13 +4,7 @@ const { record, respond } = require('../lib/recorder');
 const { requireClient, requireValue } = require('../lib/errors');
 const { publicConfig } = require('../lib/config');
 const { call } = require('../lib/snippets');
-
-let defaultsProvider = () => ({});
-try {
-  defaultsProvider = require('../lib/builders').uiDefaults;
-} catch {
-  // lib/builders.js arrives in Task 8.
-}
+const { uiDefaults } = require('../lib/builders');
 
 async function checkPublicUrl(publicUrl, fetchImpl) {
   const base = { id: 'publicUrl', label: 'Public URL reaches this app' };
@@ -35,7 +29,7 @@ function setupRoutes({ client, config, state, fetchImpl }) {
     voiceMethod: 'POST',
   };
 
-  router.get('/config', (req, res) => res.json({ config: publicConfig(config), state: state.get(), defaults: defaultsProvider(config) }));
+  router.get('/config', (req, res) => res.json({ config: publicConfig(config), state: state.get(), defaults: uiDefaults(config) }));
 
   router.post('/check', respond(() => record({
     step: 'setup.check',
