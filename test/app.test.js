@@ -34,3 +34,40 @@ test('serves the UI shell from public/', async (t) => {
   const res = await fetch(`${app.url}/`);
   assert.equal(res.status, 200);
 });
+
+const http = require('node:http');
+
+// fetch() won't let us set Host, so use node:http to look like a request that came through ngrok.
+function requestWithHost(app, { method = 'GET', path, host, body }) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${app.url}${path}`, { method, headers: { Host: host, 'Content-Type': 'application/json' } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+const TUNNEL_HOST = 'tester.example.ngrok.app';
+
+test('the UI, /api and /events only answer on localhost', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  assert.equal(await requestWithHost(app, { path: '/api/state', host: TUNNEL_HOST }), 403);
+  assert.equal(await requestWithHost(app, { method: 'POST', path: '/api/reset', host: TUNNEL_HOST, body: '{}' }), 403);
+  assert.equal(await requestWithHost(app, { path: '/events', host: TUNNEL_HOST }), 403);
+  assert.equal(await requestWithHost(app, { path: '/', host: TUNNEL_HOST }), 403);
+  assert.equal(await requestWithHost(app, { path: '/app.js', host: TUNNEL_HOST }), 403);
+  for (const host of ['localhost:3000', '127.0.0.1:3000', '[::1]:3000']) {
+    assert.equal(await requestWithHost(app, { path: '/api/state', host }), 200, host);
+  }
+});
+
+test('health and webhooks stay reachable through the tunnel', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  assert.equal(await requestWithHost(app, { path: '/health', host: TUNNEL_HOST }), 200);
+  assert.equal(await requestWithHost(app, { method: 'POST', path: '/webhooks/orchestrator', host: TUNNEL_HOST, body: '{"eventType":"X"}' }), 200);
+  assert.equal(await requestWithHost(app, { method: 'POST', path: '/channels/sms', host: TUNNEL_HOST }), 200);
+});

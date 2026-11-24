@@ -8,7 +8,7 @@ const PUBLIC = 'https://tester.example.ngrok.app';
 function fakeClient({ number }) {
   const update = mock.fn(async (params) => ({ sid: number?.sid, ...params }));
   const client = {
-    api: { v2010: { accounts: () => ({ fetch: async () => ({ friendlyName: 'My Account', status: 'active' }) }) } },
+    // No `api.v2010.accounts`: Step 0 must work with a Standard API key, which cannot read /Accounts.
     incomingPhoneNumbers: callable(() => ({ update }), { list: mock.fn(async () => (number ? [number] : [])) }),
   };
   return { client, update };
@@ -35,7 +35,21 @@ test('check reports every item as ok for a fully set-up account', async (t) => {
   assert.equal(env.ok, true);
   const byId = Object.fromEntries(env.data.checks.map((c) => [c.id, c]));
   for (const id of ['env', 'credentials', 'number', 'webhooks', 'whatsapp', 'publicUrl']) assert.equal(byId[id].ok, true, id);
+  assert.match(byId.credentials.detail, /list this account's phone numbers/);
   assert.match(env.snippet.node, /incomingPhoneNumbers\.list/);
+  assert.doesNotMatch(env.snippet.node, /accounts/);
+});
+
+test('check still verifies the API key when TWILIO_PHONE_NUMBER is not set', async (t) => {
+  const { client } = fakeClient({ number: null });
+  const app = await startApp({ client, env: { TWILIO_PHONE_NUMBER: '' }, fetchImpl: healthyFetch });
+  t.after(app.close);
+  const env = await app.post('/api/setup/check');
+  assert.equal(env.ok, true, JSON.stringify(env.error));
+  const byId = Object.fromEntries(env.data.checks.map((c) => [c.id, c]));
+  assert.equal(byId.credentials.ok, true);
+  assert.equal(byId.number.ok, false);
+  assert.deepEqual(client.incomingPhoneNumbers.list.mock.calls[0].arguments[0], { limit: 1 });
 });
 
 test('check flags wrong webhooks, unreachable PUBLIC_URL and missing WhatsApp', async (t) => {

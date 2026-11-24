@@ -29,23 +29,24 @@ function setupRoutes({ client, config, state, fetchImpl }) {
     voiceMethod: 'POST',
   };
 
+  const numberQuery = config.phoneNumber ? { phoneNumber: config.phoneNumber, limit: 1 } : { limit: 1 };
+
   router.get('/config', (req, res) => res.json({ config: publicConfig(config), state: state.get(), defaults: uiDefaults(config) }));
 
   router.post('/check', respond(() => record({
     step: 'setup.check',
     state,
-    code: [
-      `const account = await ${call(`client.api.v2010.accounts('${config.accountSid}').fetch`)};`,
-      `const [number] = await ${call('client.incomingPhoneNumbers.list', { phoneNumber: config.phoneNumber, limit: 1 })};`,
-    ],
+    // Listing numbers doubles as the "API key works" check: a Standard API key can do it,
+    // while fetching the Account itself would need a Main key.
+    code: [`const [number] = await ${call('client.incomingPhoneNumbers.list', numberQuery)};`],
   }, async () => {
     const checks = [{ id: 'env', label: '.env values', ok: config.problems.length === 0, detail: config.problems.join(' · ') || 'All required values are set' }];
     requireClient(client);
 
-    const account = await client.api.v2010.accounts(config.accountSid).fetch();
-    checks.push({ id: 'credentials', label: 'API key works', ok: true, detail: `Account "${account.friendlyName}" (${account.status})` });
+    const numbers = await client.incomingPhoneNumbers.list(numberQuery);
+    checks.push({ id: 'credentials', label: 'API key works', ok: true, detail: "The API key could list this account's phone numbers" });
 
-    const [number] = config.phoneNumber ? await client.incomingPhoneNumbers.list({ phoneNumber: config.phoneNumber, limit: 1 }) : [];
+    const number = config.phoneNumber ? numbers[0] : undefined;
     const caps = number?.capabilities || {};
     checks.push({
       id: 'number',
