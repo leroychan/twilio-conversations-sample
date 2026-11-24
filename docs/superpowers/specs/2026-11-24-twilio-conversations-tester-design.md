@@ -74,8 +74,9 @@ Facts that shape the design:
 twilio-conversations-sample/
 ├─ .env.example
 ├─ package.json            # deps: express, twilio, dotenv. scripts: start, dev (node --watch), test (node --test)
-├─ server.js               # Express app: static /public, JSON body, routes, SSE endpoint
+├─ server.js               # loads config and listens
 ├─ lib/
+│  ├─ app.js               # createApp(); server.js only loads config and listens
 │  ├─ config.js            # loads + validates env; exposes which channels are enabled
 │  ├─ twilio.js            # shared client: twilio(API_KEY, API_SECRET, { accountSid })
 │  ├─ state.js             # read/write state.json (IDs created by each step)
@@ -83,13 +84,16 @@ twilio-conversations-sample/
 │  ├─ events.js            # in-memory EventEmitter + ring buffer (last 200 events) → SSE
 │  ├─ recorder.js          # record(stepId, { method, url, body }, fn): runs fn, captures response/error/timing,
 │  │                       #   builds curl + Node snippet, returns uniform result envelope
+│  ├─ capture.js           # CapturingRequestClient: records every real HTTP exchange from the SDK
+│  ├─ snippets.js          # builds the curl and Node snippets shown in the Code tab
+│  ├─ builders.js          # JSON bodies for capture rules, Intelligence rules and actions
 │  └─ errors.js            # maps Twilio errors to beginner hints
 ├─ routes/
 │  ├─ setup.js             # step 0
 │  ├─ memory.js            # steps 1, 2, 8
 │  ├─ intelligence.js      # steps 3, 4, 9
 │  ├─ orchestrator.js      # steps 5, 7 + agent reply (Actions) + close conversation
-│  ├─ channels.js          # inbound TwiML for SMS, WhatsApp, Voice; simulate communication
+│  ├─ channels.js          # inbound TwiML for SMS, WhatsApp, Voice
 │  ├─ webhooks.js          # POST /webhooks/orchestrator, POST /webhooks/intelligence → events bus
 │  └─ reset.js             # delete created resources in reverse order, clear state.json
 ├─ public/
@@ -109,7 +113,7 @@ twilio-conversations-sample/
   "step": "memory.createStore",
   "request":  { "method": "POST", "url": "https://memory.twilio.com/v1/ControlPlane/Stores", "body": { } },
   "response": { "status": 202, "body": { } },
-  "polls":    [ { "at": "ISO", "status": "PENDING" }, { "at": "ISO", "status": "COMPLETED" } ],
+  "exchanges": [ { "request": {…}, "response": {…}, "durationMs": 0 } ],  // every real HTTP call, incl. polls
   "snippet":  { "curl": "curl -X POST ...", "node": "await client.memory.v1.stores.create({...})" },
   "state":    { "storeId": "mem_store_..." },
   "error":    null,
@@ -118,13 +122,13 @@ twilio-conversations-sample/
 ```
 On failure: `ok: false`. `error` holds `{ status, code, message, moreInfo }` and `hint` holds a beginner-friendly explanation.
 
-The `request` shown is the logical REST request that matches the SDK call. `recorder` builds it from the step's declared method, URL and body, because the SDK does not expose its wire request.
+`exchanges` are captured from the SDK's HTTP client (`CapturingRequestClient`), so they are the real wire requests; `request`/`response` are the first exchange.
 
 ### State (`state.json`, git-ignored)
 ```json
 { "storeId": null, "profileId": null, "operatorId": null, "intelligenceConfigId": null,
   "intelligenceRuleIds": [], "orchestratorConfigId": null, "conversationId": null,
-  "createdAt": {} }
+  "conversationClosed": false, "createdAt": {} }
 ```
 Each step reads its prerequisites from the state, and the forms come pre-filled from it. The progress rail derives each step's status from the state: done / ready / blocked (with the missing prerequisite named).
 
@@ -142,7 +146,7 @@ Each step panel has three parts:
 | 2 | Memory | **Create your Profile** | `memory.v1.profiles(storeId).create({ traits: { Contact: { firstName, phone, whatsapp? } } })`; then `lookup(storeId).create({ idType: 'phone', value })` to confirm | Profile card; explains why the profile must exist before traffic |
 | 3 | Intelligence | **Explore operators / create a custom one** (optional) | `intelligence.v3.operators.list()`; `operators.create({ displayName, description, author: 'SELF', prompt, outputFormat: 'JSON', outputSchema })` (default: "Upsell intent detector") | Operator list (Twilio-authored vs custom); custom operator card with prompt + schema |
 | 4 | Intelligence | **Create an Intelligence Configuration** | `intelligence.v3.configurations.create({ displayName, rules })`. Rule A: Sentiment (+ custom operator if created), trigger `COMMUNICATION`. Rule B: Summary, trigger `CONVERSATION_END`. Both: action `WEBHOOK POST PUBLIC_URL/webhooks/intelligence`, `context.memory.enabled: true` | Rules diagram (trigger → operators → webhook) |
-| 5 | Orchestrator | **Create a Conversation Configuration** | `conversations.v2.configurations.create({ displayName, description, conversationGroupingType: 'GROUP_BY_PROFILE', memoryStoreId, intelligenceConfigurationIds: [id], memoryExtractionEnabled: true, statusCallbacks: [{ url: PUBLIC_URL/webhooks/orchestrator, method: 'POST' }], channelSettings })` → `waitForOperation` | "Wiring" diagram: Configuration ↔ Store, ↔ Intelligence config, ↔ channels with capture rules |
+| 5 | Orchestrator | **Create a Conversation Configuration** (requires the Profile from step 2 as well) | `conversations.v2.configurations.create({ displayName, description, conversationGroupingType: 'GROUP_BY_PROFILE', memoryStoreId, intelligenceConfigurationIds: [id], memoryExtractionEnabled: true, statusCallbacks: [{ url: PUBLIC_URL/webhooks/orchestrator, method: 'POST' }], channelSettings })` → `waitForOperation` | "Wiring" diagram: Configuration ↔ Store, ↔ Intelligence config, ↔ channels with capture rules |
 | 6 | Orchestrator | **Talk on any channel** | See section 5 | Live chat-style timeline (SSE-driven), with a tab per channel |
 | 7 | Orchestrator | **Inspect & close the conversation** | `conversations.v2.conversations.list()`; `participants(id).list()`; `communications(id).list()`; `conversations(id).update({ status: 'CLOSED' })` | Conversation card; participant chips (type, address, `profileId`); timeline with channel icons; Close button |
 | 8 | Memory | **See what Memory learned** | `observations(storeId, profileId).list()`; `conversationSummaries(storeId, profileId).list({ conversationId })`; `recall(storeId, profileId).create({ query, conversationId })` | Observations list; summary; Recall search box with ranked, scored results |
@@ -163,6 +167,8 @@ Short timeouts are used so learners see extraction quickly. The UI explains that
 
 Steps 8 and 9 auto-poll every 5 s for up to 2 min after the conversation is closed, showing "Waiting for extraction…" until results arrive or the poll times out (with a "Refresh" button).
 
+**Blocked steps (refinement):** a step whose prerequisites are missing keeps its Run button enabled. Pressing it returns a prerequisite hint naming the missing step, instead of running the call.
+
 **Run all remaining steps:** runs steps 1–5 in order with default values. It stops at the first error and at step 6, which needs a human.
 
 **Reset:** deletes the resources in reverse order (Orchestrator config, Intelligence config, custom operator, Memory store) with operation polling, then clears `state.json`. Each deletion is shown as its own result.
@@ -175,7 +181,7 @@ Steps 8 and 9 auto-poll every 5 s for up to 2 min after the conversation is clos
 | **WhatsApp** | Same as SMS but on the registered WhatsApp sender. The sender's inbound webhook points at `POST /channels/whatsapp`. Disabled with an explanation and a registration-guide link if `TWILIO_WHATSAPP_NUMBER` is unset. | `POST /channels/whatsapp` |
 | **Voice** | Learner calls the Twilio number. `POST /channels/voice` returns `<Say>` greeting + `<Gather input="speech" action="/channels/voice/turn">`. Each turn `<Say>`s a short acknowledgement and gathers again. After 3 turns (or silence) it says goodbye and hangs up. Capture rules provide the transcription automatically, so the app does not add `<Transcription>`. | `POST /channels/voice`, `POST /channels/voice/turn` |
 | **Reply as agent** | A text box sends an outbound message into the active conversation via `conversations.v2.conversations(id).actions.create({ type: 'SEND_MESSAGE', payload: { from, to, content: { text } } })`, then polls the Action until it completes. Channel selector: SMS / WhatsApp. | `POST /api/orchestrator/reply` |
-| **Simulate** | Posts a communication through the API (`communications(id).create`) for a chosen channel/author, for learners without a phone handy. Requires an existing conversation. If none exists, it first creates one actively with explicit `CUSTOMER` + `AI_AGENT` participants. The UI labels these as "simulated" and notes that the docs do not guarantee API-created communications trigger Intelligence rules. | `POST /api/channels/simulate` |
+| **Simulate** | Posts a communication through the API (`communications(id).create`) for a chosen channel/author, for learners without a phone handy. Requires an existing conversation. If none exists, it first creates one actively with explicit `CUSTOMER` + `AI_AGENT` participants. The UI labels these as "simulated" and notes that the docs do not guarantee API-created communications trigger Intelligence rules. | `POST /api/orchestrator/simulate` |
 
 The timeline is fed by Orchestrator `COMMUNICATION_CREATED` webhooks from the SSE stream. A "Refresh from API" button re-lists communications.
 
