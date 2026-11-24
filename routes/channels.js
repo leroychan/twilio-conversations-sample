@@ -15,6 +15,7 @@ function twilioSignature(config) {
     const url = `${config.publicUrl}${req.originalUrl}`;
     const valid = twilio.validateRequest(config.authToken, req.header('X-Twilio-Signature') || '', url, req.body || {});
     if (valid) return next();
+    console.warn(`Rejected ${req.originalUrl}: the X-Twilio-Signature did not match ${url}. If ngrok restarted with a new URL, update PUBLIC_URL in .env, restart, and re-run Step 0's "Point my number's webhooks".`);
     res.status(403).type('text/plain').send('Invalid Twilio signature');
   };
 }

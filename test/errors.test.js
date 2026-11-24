@@ -31,3 +31,16 @@ test('hints cover the common beginner failures', () => {
   assert.equal(hintFor({ code: 'PREREQUISITE', message: 'Do step 1' }), 'Do step 1');
   assert.equal(hintFor({ status: 500, message: 'oops' }), null);
 });
+
+test('limit and capture-rule hints only match those failures', () => {
+  const LIMIT = /account limit/;
+  const OVERLAP = /already captures this number/;
+  assert.match(hintFor({ status: 400, message: 'Configuration limit exceeded' }), LIMIT);
+  assert.match(hintFor({ status: 400, message: 'Store limit reached' }), LIMIT);
+  assert.match(hintFor({ status: 400, message: 'Maximum number of configurations reached' }), LIMIT);
+  assert.match(hintFor({ status: 429, message: 'Quota exceeded' }), LIMIT);
+  assert.doesNotMatch(hintFor({ status: 400, message: 'displayName maximum length is 64' }), LIMIT);
+  assert.match(hintFor({ status: 409, message: 'Capture rule already exists for +15550001111' }), OVERLAP);
+  assert.match(hintFor({ status: 409, message: 'Address overlaps with another configuration' }), OVERLAP);
+  assert.doesNotMatch(hintFor({ status: 409, message: 'Conflict: displayName already in use' }) || '', OVERLAP);
+});

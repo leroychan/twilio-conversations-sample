@@ -48,9 +48,13 @@ test('voice turns continue, then hang up after the last turn or on silence', asy
 test('with TWILIO_AUTH_TOKEN set, requests need a valid Twilio signature', async (t) => {
   const app = await startApp({ env: { TWILIO_AUTH_TOKEN: 'test-auth-token' } });
   t.after(app.close);
+  const warn = t.mock.method(console, 'warn', () => {});
   const params = { From: '+15559998888', Body: 'Hi' };
   const bad = await app.postForm('/channels/sms', params, { 'X-Twilio-Signature': 'nope' });
   assert.equal(bad.status, 403);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(warn.mock.calls[0].arguments[0], /https:\/\/tester\.example\.ngrok\.app\/channels\/sms/);
+  assert.match(warn.mock.calls[0].arguments[0], /PUBLIC_URL/);
   const signature = twilio.getExpectedTwilioSignature('test-auth-token', 'https://tester.example.ngrok.app/channels/sms', params);
   const good = await app.postForm('/channels/sms', params, { 'X-Twilio-Signature': signature });
   assert.equal(good.status, 200);

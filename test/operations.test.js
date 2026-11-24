@@ -40,6 +40,14 @@ test('FAILED operations throw OPERATION_FAILED with the operation error message'
   });
 });
 
+test('FAILED operations prefer the problem-details detail, then title', async () => {
+  const url = 'https://memory.twilio.com/v1/ControlPlane/Operations/x';
+  const detail = fakeClient([{ body: { status: 'FAILED', error: { title: 'Bad Request', detail: 'Store limit reached for this account' } }, headers: {} }]);
+  await assert.rejects(waitForOperation(detail.client, url, { sleep: noSleep }), /Store limit reached for this account/);
+  const title = fakeClient([{ body: { status: 'FAILED', error: { title: 'Conflict' } }, headers: {} }]);
+  await assert.rejects(waitForOperation(title.client, url, { sleep: noSleep }), { code: 'OPERATION_FAILED', message: 'Conflict' });
+});
+
 test('times out with OPERATION_TIMEOUT', async () => {
   let clock = 0;
   const pending = { body: { status: 'PENDING' }, headers: {} };

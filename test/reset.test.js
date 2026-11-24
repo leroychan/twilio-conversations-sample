@@ -56,6 +56,23 @@ test('a 404 counts as already deleted; other failures are reported but state sti
   assert.equal(env.state.orchestratorConfigId, null);
 });
 
+test('keeps the IDs of resources that could not be deleted, clears the rest', async (t) => {
+  const busy = Object.assign(new Error('Store is in use'), { status: 409 });
+  const { client } = fakeClient({ storeRemoveError: busy });
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set(FULL);
+  const env = await app.post('/api/reset');
+  const store = env.data.deleted.find((d) => d.label === 'Memory store');
+  assert.equal(store.ok, false);
+  assert.equal(env.state.storeId, 's');
+  assert.equal(env.state.profileId, 'p');
+  assert.equal(env.state.orchestratorConfigId, null);
+  assert.equal(env.state.intelligenceConfigId, null);
+  assert.equal(env.state.operatorId, null);
+  assert.equal(env.state.conversationId, null);
+});
+
 test('skips resources that were never created', async (t) => {
   const { client, order } = fakeClient();
   const app = await startApp({ client });
