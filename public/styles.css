@@ -155,3 +155,5 @@ pre.json, pre.code { background: var(--neutral-900); color: #E6EDF7; padding: 0.
 .operators { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .operators th, .operators td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--color-border); }
 .operators code { font-size: 0.75rem; }
+
+.big { font-size: 1.4rem; margin: 0.25rem 0; }

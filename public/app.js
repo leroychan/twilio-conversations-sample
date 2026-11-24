@@ -44,6 +44,7 @@ const ctx = {
   api,
   onEvent: (fn) => eventLog.onEvent(fn),
   goTo,
+  resultPanelFor: (envelope, render) => resultPanel(envelope, render),
   async run({ button, call, render, into }) {
     if (button) {
       button.disabled = true;
