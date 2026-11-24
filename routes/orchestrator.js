@@ -3,7 +3,7 @@
 const express = require('express');
 const { record, respond } = require('../lib/recorder');
 const { requireClient, requireState, requireValue } = require('../lib/errors');
-const { waitForOperation, pollUntil } = require('../lib/operations');
+const { waitForOperation, pollUntil, OperationError } = require('../lib/operations');
 const { call } = require('../lib/snippets');
 const {
   CHANNELS,
@@ -84,7 +84,9 @@ function orchestratorRoutes({ client, config, state, sleep }) {
       requireState(current, ['orchestratorConfigId']);
       const all = await client.conversations.v2.conversations.list({ limit: 20 });
       const conversations = all.filter((c) => c.configurationId === current.orchestratorConfigId).sort(newestFirst);
-      const conversationId = req.query.id || current.conversationId || conversations[0]?.id;
+      // A closed conversation is finished: prefer the newest one for our configuration.
+      const stored = current.conversationClosed ? null : current.conversationId;
+      const conversationId = req.query.id || stored || conversations[0]?.id || current.conversationId;
       requireValue(conversationId, 'No conversations yet. Send a message or call your number (Step 6), then refresh.');
       if (conversationId !== current.conversationId) state.set({ conversationId, conversationClosed: false });
       const [conversation, participants, communications] = await Promise.all([
@@ -136,6 +138,9 @@ function orchestratorRoutes({ client, config, state, sleep }) {
         (a) => !['PENDING', 'QUEUED', 'IN_PROGRESS'].includes(a.status),
         { timeoutMs: 20000, sleep },
       );
+      if (action.status === 'FAILED') {
+        throw new OperationError('OPERATION_FAILED', `Twilio could not send the message: ${action.failureReason || 'no reason given'}`, action);
+      }
       return { action };
     });
   }));
@@ -148,19 +153,21 @@ function orchestratorRoutes({ client, config, state, sleep }) {
     const text = req.body.text || 'Hi, my last order arrived late. Also, can I upgrade to the premium plan?';
     const conversationParams = buildSimulatedConversation({ config, state: current, channel });
     const communicationParams = buildSimulatedCommunication({ config, channel, author, text });
-    const target = current.conversationId || '<conversation.id>';
+    // Communications can't be added to a closed conversation, so start a new one.
+    const reuse = current.conversationClosed ? null : current.conversationId;
+    const target = reuse || '<conversation.id>';
     return record({
       step: 'orchestrator.simulate',
       state,
       code: [
-        ...(current.conversationId ? [] : [`const conversation = await ${call('client.conversations.v2.conversations.create', conversationParams)};`]),
+        ...(reuse ? [] : [`const conversation = await ${call('client.conversations.v2.conversations.create', conversationParams)};`]),
         `const communication = await ${call(`client.conversations.v2.communications('${target}').create`, communicationParams)};`,
       ],
     }, async () => {
       requireClient(client);
       requireState(current, ['orchestratorConfigId']);
       requireChannel(config, channel, CHANNELS);
-      let conversationId = current.conversationId;
+      let conversationId = reuse;
       let conversation = null;
       if (!conversationId) {
         conversation = await client.conversations.v2.conversations.create(conversationParams);

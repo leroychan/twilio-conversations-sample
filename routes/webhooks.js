@@ -26,7 +26,8 @@ function webhookRoutes({ state, events }) {
         events.publish('orchestrator', body.eventType || 'UNKNOWN', body);
         const current = state.get();
         const isOurs = !current.orchestratorConfigId || body.data?.configurationId === current.orchestratorConfigId;
-        if (body.eventType === 'CONVERSATION_CREATED' && body.data?.id && !current.conversationId && isOurs) {
+        const needsConversation = !current.conversationId || current.conversationClosed;
+        if (body.eventType === 'CONVERSATION_CREATED' && body.data?.id && needsConversation && isOurs) {
           state.set({ conversationId: body.data.id, conversationClosed: false });
         }
       }

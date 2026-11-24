@@ -49,13 +49,14 @@ export default {
 
     const refreshOut = h('div', {});
     const refresh = h('button', { type: 'button' }, 'Refresh from API');
-    refresh.addEventListener('click', async () => {
+    const loadFromApi = async () => {
       const envelope = await ctx.run({ button: refresh, into: refreshOut, call: () => ctx.api.get('/api/orchestrator/conversation'), render: (d) => timeline(d.communications, { customerAddress: config.myPhoneNumber }) });
       if (envelope.ok) {
         live.splice(0, live.length, ...envelope.data.communications);
         drawTimeline();
       }
-    });
+    };
+    refresh.addEventListener('click', loadFromApi);
 
     const panels = instructions(config);
     const replyPanel = h('div', {});
@@ -93,6 +94,8 @@ export default {
 
     el.append(bar, panel, h('h3', {}, 'Live timeline'), status, timelineSlot, h('div', { class: 'actions' }, refresh, h('button', { type: 'button', onClick: () => ctx.goTo(7) }, 'Inspect conversation →')), refreshOut);
     drawTimeline();
+    // Coming back to this step: show the saved conversation's timeline right away.
+    if (ctx.state().conversationId) loadFromApi();
     return unsubscribe;
   },
 };

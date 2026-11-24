@@ -46,3 +46,14 @@ test('intelligence webhook publishes operator results', async (t) => {
   assert.equal(event.type, 'OPERATOR_RESULTS');
   assert.equal(event.payload.conversationId, 'conv_1');
 });
+
+test('a new conversation for our configuration replaces a closed one', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  app.state.set({ orchestratorConfigId: 'cfg_mine', conversationId: 'conv_old', conversationClosed: true });
+  await postRaw(app, '/webhooks/orchestrator', JSON.stringify({ eventType: 'CONVERSATION_CREATED', data: { id: 'conv_other', configurationId: 'cfg_other' } }));
+  assert.equal(app.state.get().conversationId, 'conv_old');
+  await postRaw(app, '/webhooks/orchestrator', JSON.stringify({ eventType: 'CONVERSATION_CREATED', data: { id: 'conv_new', configurationId: 'cfg_mine' } }));
+  assert.equal(app.state.get().conversationId, 'conv_new');
+  assert.equal(app.state.get().conversationClosed, false);
+});

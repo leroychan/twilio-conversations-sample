@@ -159,3 +159,49 @@ test('simulate rejects unknown channels', async (t) => {
   assert.equal(env.ok, false);
   assert.match(env.hint, /SMS, WHATSAPP or VOICE/);
 });
+
+test('step 7 moves on from a closed conversation to the newest one for our configuration', async (t) => {
+  const { client } = fakeOrchestrator();
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ orchestratorConfigId: 'conv_configuration_1', conversationId: 'conv_a', conversationClosed: true });
+  const env = await app.get('/api/orchestrator/conversation');
+  assert.equal(env.ok, true, JSON.stringify(env.error));
+  assert.equal(env.state.conversationId, 'conv_b');
+  assert.equal(env.state.conversationClosed, false);
+});
+
+test('step 7 keeps an open stored conversation even if a newer one exists', async (t) => {
+  const { client } = fakeOrchestrator();
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ orchestratorConfigId: 'conv_configuration_1', conversationId: 'conv_a' });
+  const env = await app.get('/api/orchestrator/conversation');
+  assert.equal(env.state.conversationId, 'conv_a');
+});
+
+test('reply fails clearly when Twilio could not send the message', async (t) => {
+  const { client, fns } = fakeOrchestrator();
+  fns.actionFetch.mock.mockImplementation(async () => ({ id: 'action_1', status: 'FAILED', failureReason: 'Number is unreachable' }));
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ conversationId: 'conv_b' });
+  const env = await app.post('/api/orchestrator/reply', { channel: 'SMS', text: 'Hello' });
+  assert.equal(env.ok, false);
+  assert.match(env.error.message, /Twilio could not send the message: Number is unreachable/);
+  assert.equal(env.error.details.status, 'FAILED');
+  assert.equal(env.error.details.id, 'action_1');
+});
+
+test('simulate starts a new conversation when the current one is closed', async (t) => {
+  const { client, fns } = fakeOrchestrator();
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ orchestratorConfigId: 'conv_configuration_1', profileId: 'mem_profile_1', conversationId: 'conv_b', conversationClosed: true });
+  const env = await app.post('/api/orchestrator/simulate', { channel: 'SMS', text: 'Back again' });
+  assert.equal(env.ok, true, JSON.stringify(env.error));
+  assert.equal(fns.convCreate.mock.callCount(), 1);
+  assert.equal(env.state.conversationId, 'conv_sim');
+  assert.equal(env.state.conversationClosed, false);
+  assert.match(env.snippet.node, /conversations\.create/);
+});
