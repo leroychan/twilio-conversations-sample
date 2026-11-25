@@ -181,7 +181,14 @@ async function runAll(button) {
 
 document.getElementById('run-all').addEventListener('click', (e) => runAll(e.currentTarget));
 // Reset lives in Step 10, which shows exactly what will be restored and deleted first.
-document.getElementById('reset').addEventListener('click', () => goTo(STEPS.at(-1).id));
+// Reset opens the cleanup step, which shows the plan before anything is deleted.
+// Already there? Re-render it so the plan reloads, and scroll back to the top.
+document.getElementById('reset').addEventListener('click', () => {
+  const cleanupId = STEPS.at(-1).id;
+  if (currentStepId() === cleanupId) renderStep();
+  else goTo(cleanupId);
+  window.scrollTo({ top: 0 });
+});
 
 let boot;
 try {
