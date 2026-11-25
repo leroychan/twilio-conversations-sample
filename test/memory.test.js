@@ -11,18 +11,19 @@ function fakeMemory() {
     profileCreate: mock.fn(async () => ({ id: 'mem_profile_1', message: 'accepted' })),
     profileFetch: mock.fn(async () => ({ id: 'mem_profile_1', traits: { Contact: { firstName: 'Alex' } } })),
     lookupCreate: mock.fn(async () => ({ normalizedValue: '+15559998888', profiles: ['mem_profile_1'] })),
-    observationsList: mock.fn(async () => [{ id: 'obs1', content: 'Prefers SMS' }]),
+    observationsRequest: mock.fn(async () => ({ statusCode: 200, body: { meta: { key: 'observations' }, observations: [{ id: 'obs1', content: 'Prefers SMS' }] } })),
     summariesList: mock.fn(async () => [{ id: 'sum1', content: 'Asked about an upgrade' }]),
     recallCreate: mock.fn(async () => ({ observations: [{ content: 'Prefers SMS', score: 0.9 }], summaries: [], communications: [] })),
   };
   const client = {
+    // Observations are listed with a raw request: the SDK crashes when Twilio returns "observations": null.
+    request: fns.observationsRequest,
     memory: {
       v1: {
         stores: callable(() => ({ fetch: fns.storeFetch }), { create: fns.storesCreate }),
         operations: () => ({ fetchWithHttpInfo: fns.opFetch }),
         profiles: (storeId, profileId) => (profileId ? { fetch: fns.profileFetch } : { create: fns.profileCreate }),
         lookup: () => ({ create: fns.lookupCreate }),
-        observations: () => ({ list: fns.observationsList }),
         conversationSummaries: () => ({ list: fns.summariesList }),
         recall: () => ({ create: fns.recallCreate }),
       },
@@ -86,6 +87,22 @@ test('step 8 lists observations and summaries for the current conversation', asy
   assert.equal(env.data.observations.length, 1);
   assert.equal(env.data.summaries.length, 1);
   assert.deepEqual(fns.summariesList.mock.calls[0].arguments[0], { conversationId: 'conv_1', limit: 10 });
+  assert.deepEqual(fns.observationsRequest.mock.calls[0].arguments[0], {
+    method: 'get',
+    uri: 'https://memory.twilio.com/v1/Stores/mem_store_1/Profiles/mem_profile_1/Observations',
+    params: { pageSize: 20 },
+  });
+});
+
+test('step 8 treats "observations": null (a profile with no observations yet) as an empty list', async (t) => {
+  const { client, fns } = fakeMemory();
+  fns.observationsRequest.mock.mockImplementation(async () => ({ statusCode: 200, body: { meta: { key: 'observations', nextToken: null }, observations: null } }));
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set({ storeId: 'mem_store_1', profileId: 'mem_profile_1', conversationId: 'conv_1' });
+  const env = await app.get('/api/memory/results');
+  assert.equal(env.ok, true, JSON.stringify(env.error));
+  assert.deepEqual(env.data.observations, []);
 });
 
 test('recall sends the query and limits', async (t) => {

@@ -75,20 +75,35 @@ function memoryRoutes({ client, config, state, sleep }) {
     const current = state.get();
     const summaryFilter = { ...(current.conversationId && { conversationId: current.conversationId }), limit: 10 };
     const profilePath = `'${current.storeId}', '${current.profileId}'`;
+    // A raw request, because the SDK's list() crashes when a profile has no observations yet:
+    // Twilio then answers "observations": null instead of [].
+    const observationsRequest = {
+      method: 'get',
+      uri: `https://memory.twilio.com/v1/Stores/${current.storeId}/Profiles/${current.profileId}/Observations`,
+      params: { pageSize: 20 },
+    };
     return record({
       step: 'memory.results',
       state,
       code: [
         `const profile = await client.memory.v1.profiles(${profilePath}).fetch();`,
-        `const observations = await ${call(`client.memory.v1.observations(${profilePath}).list`, { limit: 20 })};`,
+        `const response = await ${call('client.request', observationsRequest)};`,
+        '// Empty lists come back as null, not [].',
+        'const observations = response.body.observations || [];',
         `const summaries = await ${call(`client.memory.v1.conversationSummaries(${profilePath}).list`, summaryFilter)};`,
       ],
     }, async () => {
       requireClient(client);
       requireState(current, ['storeId', 'profileId']);
+      const listObservations = async () => {
+        const response = await client.request(observationsRequest);
+        if (response.statusCode < 200 || response.statusCode >= 300) client.memory.v1.throwException(response);
+        const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+        return body?.[body?.meta?.key || 'observations'] || [];
+      };
       const [profile, observations, summaries] = await Promise.all([
         client.memory.v1.profiles(current.storeId, current.profileId).fetch(),
-        client.memory.v1.observations(current.storeId, current.profileId).list({ limit: 20 }),
+        listObservations(),
         client.memory.v1.conversationSummaries(current.storeId, current.profileId).list(summaryFilter),
       ]);
       return { profile, observations, summaries };
