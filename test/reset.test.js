@@ -5,7 +5,7 @@ const { startApp, callable } = require('./_support/harness');
 
 const PUBLIC = 'https://tester.example.ngrok.app';
 
-function fakeClient({ storeRemoveError, numberUpdateError, number, conversations = [] } = {}) {
+function fakeClient({ storeRemoveError, storeFetchError, numberUpdateError, number, conversations = [] } = {}) {
   const order = [];
   const remove = (label, result = true, error) => mock.fn(async () => {
     order.push(label);
@@ -16,6 +16,11 @@ function fakeClient({ storeRemoveError, numberUpdateError, number, conversations
     order.push('number');
     if (numberUpdateError) throw numberUpdateError;
     return { sid: 'PN1', ...params };
+  });
+  // fetch() is how reset double-checks a failed delete: by default the resource still exists.
+  const exists = (error) => mock.fn(async () => {
+    if (error) throw error;
+    return { id: 'x' };
   });
   const client = {
     incomingPhoneNumbers: callable(() => ({ update: numberUpdate }), { list: mock.fn(async () => (number ? [number] : [])) }),
@@ -29,7 +34,7 @@ function fakeClient({ storeRemoveError, numberUpdateError, number, conversations
       operators: () => ({ remove: remove('operator') }),
     } },
     memory: { v1: {
-      stores: () => ({ remove: remove('store', true, storeRemoveError) }),
+      stores: () => ({ remove: remove('store', true, storeRemoveError), fetch: exists(storeFetchError) }),
       operations: () => ({ fetchWithHttpInfo: async () => ({ body: { status: 'COMPLETED' }, headers: {} }) }),
     } },
   };
@@ -83,6 +88,22 @@ test('keeps the IDs of resources that could not be deleted, clears the rest', as
   assert.equal(env.state.intelligenceConfigId, null);
   assert.equal(env.state.operatorId, null);
   assert.equal(env.state.conversationId, null);
+});
+
+test('a delete that reports an error still counts when Twilio confirms the resource is gone', async (t) => {
+  // e.g. the deletion operation timed out, but Twilio finished deleting the store anyway.
+  const timeout = Object.assign(new Error('Still not finished after 60s'), { code: 'OPERATION_TIMEOUT' });
+  const notFound = Object.assign(new Error('The requested memory store does not exist'), { status: 404 });
+  const { client } = fakeClient({ storeRemoveError: timeout, storeFetchError: notFound });
+  const app = await startApp({ client });
+  t.after(app.close);
+  app.state.set(FULL);
+  const env = await app.post('/api/reset');
+  const store = env.data.deleted.find((d) => d.label === 'Memory store');
+  assert.equal(store.ok, true);
+  assert.match(store.note, /no longer exists/);
+  assert.equal(env.state.storeId, null);
+  assert.equal(env.state.profileId, null);
 });
 
 test('skips resources that were never created', async (t) => {

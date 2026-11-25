@@ -130,15 +130,27 @@ function resetRoutes({ client, config, state, events, backup, sleep }) {
       // 2. Delete what the tester created.
       const deleted = [];
       const kept = {};
+      // A delete can report an error (say, its operation timed out) and still finish on Twilio.
+      // Fetch the resource: only a 404 proves it is gone.
+      const isGone = async (fetch) => {
+        try {
+          await fetch();
+          return false;
+        } catch (err) {
+          return err.status === 404;
+        }
+      };
       // keys: the state.json values that belong to this resource, kept if it could not be deleted.
-      const attempt = async (label, id, remove, keys = []) => {
+      // resource: an SDK context such as client.memory.v1.stores(id), which has remove() and fetch().
+      const attempt = async (label, id, resource, keys = []) => {
         if (!id) return;
         try {
-          const result = await remove();
+          const result = await resource.remove();
           if (result?.statusUrl) await waitForOperation(client, result.statusUrl, { sleep });
           deleted.push({ label, id, ok: true });
         } catch (err) {
           if (err.status === 404) deleted.push({ label, id, ok: true, note: 'already deleted' });
+          else if (await isGone(() => resource.fetch())) deleted.push({ label, id, ok: true, note: `reported "${err.message}", but it no longer exists on Twilio` });
           else {
             deleted.push({ label, id, ok: false, error: err.message });
             for (const key of keys) kept[key] = current[key];
@@ -152,12 +164,13 @@ function resetRoutes({ client, config, state, events, backup, sleep }) {
         deleted.push({ label: 'Conversations', id: current.orchestratorConfigId, ok: false, error: `Could not list conversations: ${err.message}` });
       }
       for (const conversation of conversations) {
-        await attempt('Conversation', conversation.id, () => client.conversations.v2.conversations(conversation.id).remove());
+        await attempt('Conversation', conversation.id, client.conversations.v2.conversations(conversation.id));
       }
-      await attempt('Conversation configuration', current.orchestratorConfigId, () => client.conversations.v2.configurations(current.orchestratorConfigId).remove(), ['orchestratorConfigId']);
-      await attempt('Intelligence configuration', current.intelligenceConfigId, () => client.intelligence.v3.configurations(current.intelligenceConfigId).remove(), ['intelligenceConfigId', 'intelligenceRuleIds']);
-      await attempt('Custom operator', current.operatorId, () => client.intelligence.v3.operators(current.operatorId).remove(), ['operatorId']);
-      await attempt('Memory store', current.storeId, () => client.memory.v1.stores(current.storeId).remove(), ['storeId', 'profileId']);
+      // `current.x &&` skips resources that were never created.
+      await attempt('Conversation configuration', current.orchestratorConfigId, current.orchestratorConfigId && client.conversations.v2.configurations(current.orchestratorConfigId), ['orchestratorConfigId']);
+      await attempt('Intelligence configuration', current.intelligenceConfigId, current.intelligenceConfigId && client.intelligence.v3.configurations(current.intelligenceConfigId), ['intelligenceConfigId', 'intelligenceRuleIds']);
+      await attempt('Custom operator', current.operatorId, current.operatorId && client.intelligence.v3.operators(current.operatorId), ['operatorId']);
+      await attempt('Memory store', current.storeId, current.storeId && client.memory.v1.stores(current.storeId), ['storeId', 'profileId']);
       state.reset();
       // Keep IDs of anything still on Twilio, so this step can be run again.
       if (Object.keys(kept).length) state.set(kept);
