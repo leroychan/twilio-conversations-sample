@@ -12,7 +12,8 @@ test('channel settings have bidirectional capture rules per enabled channel', ()
   assert.deepEqual(Object.keys(s).sort(), ['SMS', 'VOICE', 'WHATSAPP']);
   assert.deepEqual(s.SMS.captureRules, [{ from: '*', to: '+15550001111' }, { from: '+15550001111', to: '*' }]);
   assert.deepEqual(s.SMS.statusTimeouts, { inactive: 5, closed: 30 });
-  assert.deepEqual(s.WHATSAPP.captureRules, [{ from: '*', to: '+15550002222' }, { from: '+15550002222', to: '*' }]);
+  // WhatsApp addresses carry the whatsapp: prefix, exactly as they appear on the message.
+  assert.deepEqual(s.WHATSAPP.captureRules, [{ from: '*', to: 'whatsapp:+15550002222' }, { from: 'whatsapp:+15550002222', to: '*' }]);
   assert.deepEqual(s.VOICE.captureRules, [
     { from: '*', to: '+15550001111', metadata: { callType: 'PSTN' } },
     { from: '+15550001111', to: '*', metadata: { callType: 'PSTN' } },
