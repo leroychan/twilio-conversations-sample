@@ -170,3 +170,17 @@ pre.json, pre.code { background: var(--neutral-900); color: #E6EDF7; padding: 0.
 .change .to { color: var(--color-success); font-weight: 600; }
 button.danger-fill { background: var(--color-danger); border-color: var(--color-danger); }
 button.danger-fill:hover { background: var(--red-500); filter: brightness(0.9); }
+
+/* Conversation Intelligence panel (Steps 6 and 7) */
+.insights-card { margin-top: 1rem; border-left: 4px solid var(--product-intelligence); }
+.insights { display: grid; gap: 0.75rem; }
+.insight { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.6rem 0.8rem; }
+.insight-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+.insight-head h4 { margin: 0; }
+.insight-text { margin: 0; line-height: 1.45; }
+.insight-history { margin-top: 0.5rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.meter-row { display: inline-flex; align-items: center; gap: 0.5rem; }
+.meter { display: inline-block; width: 8rem; height: 0.5rem; border-radius: 999px; background: var(--neutral-100); overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--color-primary); }
+.quote { font-style: italic; }
+button.small-button { padding: 0.2rem 0.6rem; font-size: 0.8rem; }

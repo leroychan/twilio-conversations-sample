@@ -46,7 +46,8 @@ test('Step 6 loads the saved conversation from the API when it mounts', async (t
   const { ctx, calls } = fakeCtx({ conversationId: 'conv_1' });
   talk.mount(new FakeElement('div'), ctx);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(calls, ['/api/orchestrator/conversation']);
+  // The timeline, plus the Conversation Intelligence panel's operator results.
+  assert.deepEqual(calls.sort(), ['/api/intelligence/results', '/api/orchestrator/conversation']);
 });
 
 test('Step 6 waits for traffic when there is no conversation yet', async (t) => {

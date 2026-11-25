@@ -1,5 +1,6 @@
 import { h, kv, card, empty } from '../lib/dom.js';
 import { timeline } from '../lib/timeline.js';
+import { insightsPanel } from '../lib/insights.js';
 
 function instructions(config) {
   const wa = config.channels?.whatsapp;
@@ -92,10 +93,14 @@ export default {
     Object.keys(tabs).forEach((name) => bar.append(h('button', { type: 'button', role: 'tab', onClick: () => select(name) }, name)));
     select('SMS');
 
-    el.append(bar, panel, h('h3', {}, 'Live timeline'), status, timelineSlot, h('div', { class: 'actions' }, refresh, h('button', { type: 'button', onClick: () => ctx.goTo(7) }, 'Inspect conversation →')), refreshOut);
+    const insights = insightsPanel(ctx);
+    el.append(bar, panel, h('h3', {}, 'Live timeline'), status, timelineSlot, h('div', { class: 'actions' }, refresh, h('button', { type: 'button', onClick: () => ctx.goTo(7) }, 'Inspect conversation →')), refreshOut, insights.el);
     drawTimeline();
     // Coming back to this step: show the saved conversation's timeline right away.
     if (ctx.state().conversationId) loadFromApi();
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      insights.stop();
+    };
   },
 };

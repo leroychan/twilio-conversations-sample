@@ -1,5 +1,6 @@
 import { h, card, kv, badge, empty } from '../lib/dom.js';
 import { timeline } from '../lib/timeline.js';
+import { insightsPanel } from '../lib/insights.js';
 
 export default {
   id: 7,
@@ -9,7 +10,13 @@ export default {
     <p>Conversations move <code>ACTIVE → INACTIVE → CLOSED</code> on the timeouts from Step 5. <strong>Closing</strong> fires the Intelligence <code>CONVERSATION_END</code> rule (Summary) and starts memory extraction. A closed conversation can't be reopened; new messages start a new one.</p>`,
   mount(el, ctx) {
     const out = h('div', {});
-    const load = (id) => ctx.run({ button: loadButton, into: out, call: () => ctx.api.get(`/api/orchestrator/conversation${id ? `?id=${encodeURIComponent(id)}` : ''}`), render });
+    const insights = insightsPanel(ctx);
+    const load = async (id) => {
+      const envelope = await ctx.run({ button: loadButton, into: out, call: () => ctx.api.get(`/api/orchestrator/conversation${id ? `?id=${encodeURIComponent(id)}` : ''}`), render });
+      // Loading can switch the current conversation (picker, or a newer one): show its results.
+      if (envelope.ok) insights.refresh();
+      return envelope;
+    };
     const loadButton = h('button', { type: 'button', class: 'primary' }, 'Load conversation');
     loadButton.addEventListener('click', () => load());
 
@@ -37,7 +44,8 @@ export default {
         card('Timeline', timeline(data.communications, { customerAddress: ctx.config.myPhoneNumber })));
     }
 
-    el.append(h('div', { class: 'actions' }, loadButton, closeButton), out, closeOut);
+    el.append(h('div', { class: 'actions' }, loadButton, closeButton), out, closeOut, insights.el);
     if (ctx.state().orchestratorConfigId) load();
+    return insights.stop;
   },
 };
